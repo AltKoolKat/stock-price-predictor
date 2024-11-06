@@ -15,7 +15,7 @@ It also displays the stock's historical moving averages.
 """)
 
 # User input for stock ticker
-stock = st.text_input("Enter the Stock Ticker (e.g., AAPL, MSFT)", "AAPL")
+stock = st.text_input("Enter the Stock Ticker (e.g., AAPL, MSFT)", "^NSEI")
 end = datetime.now()
 start = datetime(end.year - 20, end.month, end.day)
 nifty_50_data = yf.download(stock, start, end)
