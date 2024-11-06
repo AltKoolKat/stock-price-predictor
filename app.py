@@ -19,10 +19,14 @@ stock = st.text_input("Enter the Stock Ticker (e.g., AAPL, MSFT)", "AAPL").upper
 start = datetime(datetime.now().year - 20, 1, 1)
 end = datetime.now()
 
-# Load stock data
+# Load stock data with error handling
 try:
     data = yf.download(stock, start, end)
-    st.success(f"Loaded data for {stock}")
+    if data.empty:
+        st.warning("No data found for the entered stock ticker. Please try a different ticker.")
+        st.stop()
+    else:
+        st.success(f"Loaded data for {stock}")
 except Exception as e:
     st.error(f"Error loading stock data: {e}")
     st.stop()
@@ -63,6 +67,10 @@ plot_graph((15, 6), data['Close'], data['MA_100'], "Close Price with 100-day Mov
 # Scale data for prediction
 splitting_len = int(len(data) * 0.9)
 x_test = pd.DataFrame(data['Close'][splitting_len:])
+if len(x_test) < 100:
+    st.warning("Insufficient data for prediction. Please choose another stock ticker.")
+    st.stop()
+
 scaler = MinMaxScaler(feature_range=(0, 1))
 scaled_data = scaler.fit_transform(x_test)
 
