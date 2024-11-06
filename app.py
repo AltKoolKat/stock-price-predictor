@@ -7,80 +7,97 @@ import yfinance as yf
 from sklearn.preprocessing import MinMaxScaler
 from datetime import datetime
 
-st.title("Stock Price Predictor App")
+# App title and description
+st.title("📈 Stock Price Predictor App")
+st.markdown("""
+This app uses a pre-trained model to predict stock prices. 
+It also displays the stock's historical moving averages.
+""")
 
-stock = st.text_input("Enter the Stock ID", "^NSEI")
+# User input for stock ticker
+stock = st.text_input("Enter the Stock Ticker (e.g., AAPL, MSFT)", "AAPL").upper()
+start = datetime(datetime.now().year - 20, 1, 1)
 end = datetime.now()
-start = datetime(end.year-20,end.month,end.day)
 
-data = yf.download(stock, start, end)
+# Load stock data
+try:
+    data = yf.download(stock, start, end)
+    st.success(f"Loaded data for {stock}")
+except Exception as e:
+    st.error(f"Error loading stock data: {e}")
+    st.stop()
 
-model = load_model("model.keras")
+# Load pre-trained model
+try:
+    model = load_model("model.keras")
+except Exception as e:
+    st.error(f"Error loading the model: {e}")
+    st.stop()
+
+# Display stock data
 st.subheader("Stock Data")
-st.write(data)
+st.write(data.tail())
 
-splitting_len = int(len(data)*0.9)
-x_test = pd.DataFrame(data.Close[splitting_len:])
+# Calculate Moving Averages
+data['MA_250'] = data['Close'].rolling(window=250).mean()
+data['MA_200'] = data['Close'].rolling(window=200).mean()
+data['MA_100'] = data['Close'].rolling(window=100).mean()
 
-def plot_graph(figsize, values, full_data, extra_data = 0, extra_dataset = None):
-    fig = plt.figure(figsize=figsize)
-    plt.plot(values,'Orange')
-    plt.plot(full_data.Close, 'b')
-    if extra_data:
-        plt.plot(extra_dataset)
-    return fig
+# Function to plot data
+def plot_graph(figsize, close_data, moving_avg=None, title=""):
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(close_data, label="Close Price", color="blue", linewidth=1.5)
+    if moving_avg is not None:
+        ax.plot(moving_avg, label="Moving Average", color="orange", linestyle="--")
+    ax.set_title(title)
+    ax.set_xlabel("Date")
+    ax.set_ylabel("Price")
+    ax.legend()
+    st.pyplot(fig)
 
-st.subheader('Original Close Price and MA for 250 days')
-data['MA_for_250_days'] = data.Close.rolling(250).mean()
-st.pyplot(plot_graph((15,6), data['MA_for_250_days'],data,0))
+# Show Moving Averages
+st.subheader("Moving Averages")
+plot_graph((15, 6), data['Close'], data['MA_250'], "Close Price with 250-day Moving Average")
+plot_graph((15, 6), data['Close'], data['MA_100'], "Close Price with 100-day Moving Average")
 
-# st.subheader('Original Close Price and MA for 200 days')
-# data['MA_for_200_days'] = data.Close.rolling(200).mean()
-# st.pyplot(plot_graph((15,6), data['MA_for_200_days'],data,0))
+# Scale data for prediction
+splitting_len = int(len(data) * 0.9)
+x_test = pd.DataFrame(data['Close'][splitting_len:])
+scaler = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(x_test)
 
-st.subheader('Original Close Price and MA for 100 days')
-data['MA_for_100_days'] = data.Close.rolling(100).mean()
-st.pyplot(plot_graph((15,6), data['MA_for_100_days'],data,0))
-
-st.subheader('Original Close Price and MA for 100 days and MA for 250 days')
-st.pyplot(plot_graph((15,6), data['MA_for_100_days'],data,1,data['MA_for_250_days']))
-
-
-scaler = MinMaxScaler(feature_range=(0,1))
-scaled_data = scaler.fit_transform(x_test[['Close']])
-
+# Prepare data for prediction
 x_data = []
 y_data = []
-
-for i in range(100,len(scaled_data)):
+for i in range(100, len(scaled_data)):
     x_data.append(scaled_data[i-100:i])
     y_data.append(scaled_data[i])
 
 x_data, y_data = np.array(x_data), np.array(y_data)
 
+# Predict and inverse transform
 predictions = model.predict(x_data)
-
-inv_pre = scaler.inverse_transform(predictions)
+inv_predictions = scaler.inverse_transform(predictions)
 inv_y_test = scaler.inverse_transform(y_data)
 
-ploting_data = pd.DataFrame(
- {
-  'original_test_data': inv_y_test.reshape(-1),
-    'predictions': inv_pre.reshape(-1)
- } ,
-    index = data.index[splitting_len+100:]
-)
-st.subheader("Original values vs Predicted values")
-st.write(ploting_data)
+# Dataframe for plotting original vs predicted
+plotting_data = pd.DataFrame({
+    "Original": inv_y_test.reshape(-1),
+    "Predicted": inv_predictions.reshape(-1)
+}, index=data.index[splitting_len+100:])
 
-st.subheader('Original Close Price vs Predicted Close price')
-fig = plt.figure(figsize=(15,6))
-plt.plot(pd.concat([data.Close[:splitting_len+100],ploting_data], axis=0))
-plt.legend(["Data- not used", "Original Test data", "Predicted Test data"])
+# Plot original vs predicted values
+st.subheader("Original vs Predicted Close Prices")
+fig, ax = plt.subplots(figsize=(15, 6))
+ax.plot(data['Close'], label="Actual Data", color="blue", linewidth=1.5)
+ax.plot(plotting_data['Original'], label="Original Test Data", color="green", linestyle="--")
+ax.plot(plotting_data['Predicted'], label="Predicted Data", color="red", linestyle="--")
+ax.legend()
 st.pyplot(fig)
 
-last_100_days = scaled_data[-100:].reshape(1,100,1)
-x = model.predict(last_100_days)
-x = scaler.inverse_transform(x)
-st.subheader("Prediction for tommorow's price")
-st.write(x)
+# Predict tomorrow's price
+last_100_days = scaled_data[-100:].reshape(1, 100, 1)
+predicted_price = model.predict(last_100_days)
+predicted_price = scaler.inverse_transform(predicted_price)
+st.subheader("Prediction for Tomorrow's Price")
+st.write(f"${predicted_price[0][0]:.2f}")
