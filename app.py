@@ -19,16 +19,16 @@ stock = st.text_input("Enter the Stock Ticker (e.g., AAPL, MSFT)", "AAPL").upper
 start = datetime(datetime.now().year - 20, 1, 1)
 end = datetime.now()
 
-# Load stock data with error handling
+# Attempt to load stock data
 try:
-    data = yf.download(stock, start, end)
+    data = yf.download(stock, start=start, end=end)
     if data.empty:
-        st.warning("No data found for the entered stock ticker. Please try a different ticker.")
+        st.warning(f"No data found for the ticker symbol '{stock}'. Please try a different one.")
         st.stop()
     else:
-        st.success(f"Loaded data for {stock}")
+        st.success(f"Successfully loaded data for {stock}.")
 except Exception as e:
-    st.error(f"Error loading stock data: {e}")
+    st.error(f"Failed to download stock data: {e}")
     st.stop()
 
 # Load pre-trained model
